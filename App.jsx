@@ -1,20 +1,53 @@
 import { useState, useEffect, useRef } from "react";
+import { useTeamSync } from "./src/services/teamSync";
+import AdminDashboard from "./src/components/AdminDashboard.jsx";
+import SupabaseQuickTest from "./src/components/SupabaseQuickTest.jsx";
 
 // ═══════════════════════════════════════════════════════════════
 // DATOS
 // ═══════════════════════════════════════════════════════════════
 
 const GLOSSARY = {
-  "Marco Lógico": "Herramienta de planificación de proyectos que organiza objetivos, actividades, indicadores y supuestos en una matriz de 4 columnas x 4 filas.",
-  "Árbol de Problemas": "Diagrama que representa causas (raíces), problema central (tronco) y efectos (ramas) de una situación negativa.",
-  "Indicador SMART": "Específico, Medible, Alcanzable, Relevante y con límite de Tiempo. Permite verificar si se logró el objetivo.",
-  "Supuesto": "Condición externa necesaria para el éxito del proyecto, pero fuera del control del equipo gestor.",
-  "Elasticidad-precio": "Mide cuánto cambia la cantidad demandada ante un cambio en el precio. Ed = %ΔQd / %ΔP.",
-  "Bien meritorio": "Bien que genera beneficios sociales más allá del consumidor individual (ej: agua potable, educación, salud).",
-  "Valoración contingente": "Técnica de encuesta para estimar cuánto estarían dispuestos a pagar los usuarios por un bien sin precio de mercado.",
-  "Análisis PESTEL": "Analiza factores Políticos, Económicos, Sociales, Tecnológicos, Ecológicos y Legales del entorno del proyecto.",
-  "Subsidio Cruzado": "Esquema tarifario donde usuarios de mayores ingresos pagan una tarifa más alta para subsidiar a los de menores ingresos, garantizando acceso universal y sostenibilidad financiera.",
-  "Bloque Tarifario": "Estructura de precios escalonada según consumo; los primeros metros cúbicos (bloque básico) tienen precio reducido, y los excedentes son más caros."
+  "Marco Lógico": {
+    description: "Herramienta de planificación de proyectos que organiza objetivos, actividades, indicadores y supuestos en una matriz de 4 columnas x 4 filas.",
+    link: "https://es.wikipedia.org/wiki/Marco_l%C3%B3gico",
+  },
+  "Árbol de Problemas": {
+    description: "Diagrama que representa causas (raíces), problema central (tronco) y efectos (ramas) de una situación negativa.",
+    link: "https://www.google.com/search?q=%C3%A1rbol+de+problemas+gesti%C3%B3n+de+proyectos",
+  },
+  "Indicador SMART": {
+    description: "Específico, Medible, Alcanzable, Relevante y con límite de Tiempo. Permite verificar si se logró el objetivo.",
+    link: "https://es.wikipedia.org/wiki/Criterios_SMART",
+  },
+  "Supuesto": {
+    description: "Condición externa necesaria para el éxito del proyecto, pero fuera del control del equipo gestor.",
+    link: "https://www.google.com/search?q=supuesto+marco+l%C3%B3gico+proyectos",
+  },
+  "Elasticidad-precio": {
+    description: "Mide cuánto cambia la cantidad demandada ante un cambio en el precio. Ed = %ΔQd / %ΔP.",
+    link: "https://es.wikipedia.org/wiki/Elasticidad-precio_de_la_demanda",
+  },
+  "Bien meritorio": {
+    description: "Bien que genera beneficios sociales más allá del consumidor individual (ej: agua potable, educación, salud).",
+    link: "https://www.google.com/search?q=bien+meritorio+econom%C3%ADa+definici%C3%B3n",
+  },
+  "Valoración contingente": {
+    description: "Técnica de encuesta para estimar cuánto estarían dispuestos a pagar los usuarios por un bien sin precio de mercado.",
+    link: "https://es.wikipedia.org/wiki/Valoraci%C3%B3n_contingente",
+  },
+  "Análisis PESTEL": {
+    description: "Analiza factores Políticos, Económicos, Sociales, Tecnológicos, Ecológicos y Legales del entorno del proyecto.",
+    link: "https://es.wikipedia.org/wiki/An%C3%A1lisis_PESTEL",
+  },
+  "Subsidio Cruzado": {
+    description: "Esquema tarifario donde usuarios de mayores ingresos pagan una tarifa más alta para subsidiar a los de menores ingresos, garantizando acceso universal y sostenibilidad financiera.",
+    link: "https://www.google.com/search?q=subsidio+cruzado+tarifas+agua",
+  },
+  "Bloque Tarifario": {
+    description: "Estructura de precios escalonada según consumo; los primeros metros cúbicos (bloque básico) tienen precio reducido, y los excedentes son más caros.",
+    link: "https://www.google.com/search?q=bloque+tarifario+agua+definici%C3%B3n",
+  }
 };
 
 const ROOMS = [
@@ -745,8 +778,8 @@ function PuzzleEncuesta({ puzzle, onSolve, color }) {
   );
 }
 
-function renderPuzzle(puzzle, onSolve, color) {
-  const props = { puzzle, onSolve, color };
+function renderPuzzle(puzzle, onSolve, color, onScore, score) {
+  const props = { puzzle, onSolve, color, onScore, score };
   if (puzzle.type === "sort") return <PuzzleSort {...props} />;
   if (puzzle.type === "trueFalse") return <PuzzleTrueFalse {...props} />;
   if (puzzle.type === "match") return <PuzzleMatch {...props} />;
@@ -766,6 +799,86 @@ const btn = (color) => ({
   fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%",
   boxShadow: `0 4px 20px ${color}44`
 });
+
+function usePuzzleChallenge(resetKey, onScore) {
+  const maxAttempts = 3;
+  const pointsByAttempt = [10, 7, 4];
+  const wrongPenalty = -2;
+  const [attemptsUsed, setAttemptsUsed] = useState(0);
+  const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    setAttemptsUsed(0);
+    setLocked(false);
+  }, [resetKey]);
+
+  const attemptsLeft = Math.max(0, maxAttempts - attemptsUsed);
+
+  const registerWrong = () => {
+    if (locked || attemptsUsed >= maxAttempts) {
+      return { attemptsLeft: 0, exhausted: true, penalty: 0 };
+    }
+
+    const nextAttemptsUsed = attemptsUsed + 1;
+    const nextAttemptsLeft = Math.max(0, maxAttempts - nextAttemptsUsed);
+
+    setAttemptsUsed(nextAttemptsUsed);
+    if (onScore) {
+      onScore(wrongPenalty);
+    }
+    if (nextAttemptsLeft === 0) {
+      setLocked(true);
+    }
+
+    return {
+      attemptsLeft: nextAttemptsLeft,
+      exhausted: nextAttemptsLeft === 0,
+      penalty: wrongPenalty,
+    };
+  };
+
+  const registerCorrect = () => {
+    if (locked) return 0;
+
+    const points = pointsByAttempt[Math.min(attemptsUsed, pointsByAttempt.length - 1)];
+    setLocked(true);
+    if (onScore) {
+      onScore(points);
+    }
+
+    return points;
+  };
+
+  return {
+    maxAttempts,
+    attemptsUsed,
+    attemptsLeft,
+    exhausted: locked || attemptsUsed >= maxAttempts,
+    registerWrong,
+    registerCorrect,
+  };
+}
+
+function PuzzleStatus({ attemptsLeft, maxAttempts, score, color }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <span style={{ background: `${color}22`, color: color, border: `1px solid ${color}55`, borderRadius: 999, padding: "5px 10px", fontSize: 11, fontWeight: 800 }}>
+        Intentos: {attemptsLeft}/{maxAttempts}
+      </span>
+      <span style={{ background: "rgba(255,255,255,0.06)", color: "#e2e8f0", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 999, padding: "5px 10px", fontSize: 11, fontWeight: 800 }}>
+        Puntos: {score}
+      </span>
+    </div>
+  );
+}
+
+function buildAttemptFeedback(baseMessage, attemptsLeft, exhausted) {
+  if (exhausted) {
+    return `${baseMessage} Se agotaron los intentos. Revisa el concepto y vuelve a intentar.`;
+  }
+
+  return `${baseMessage} Te quedan ${attemptsLeft} intentos.`;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TIMER HOOK
@@ -1030,7 +1143,14 @@ function PuzzleProgress({ pieces, roomColors }) {
 // APP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 export default function App() {
-  const [screen, setScreen] = useState("start");
+  const initialScreen = (() => {
+    if (typeof window === "undefined") return "start";
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    if (mode === "admin") return "admin-login";
+    if (mode === "test") return "test";
+    return "start";
+  })();
+  const [screen, setScreen] = useState(initialScreen);
   const [roomIdx, setRoomIdx] = useState(0);
   const [puzzleIdx, setPuzzleIdx] = useState(0);
   const [phase, setPhase] = useState("story");
@@ -1041,7 +1161,15 @@ export default function App() {
   const [roomTimes, setRoomTimes] = useState([]);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [round, setRound] = useState(1);
+  const [score, setScore] = useState(0);
   const [collectedPieces, setCollectedPieces] = useState(Array(ROOMS.length).fill(false));
+  const [joinCode, setJoinCode] = useState("");
+  const [groupName, setGroupName] = useState("Grupo 1");
+  const [joinError, setJoinError] = useState("");
+  const [adminCodeInput, setAdminCodeInput] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const sync = useTeamSync();
+  const adminAccessCode = import.meta.env.VITE_ADMIN_ACCESS_CODE || "AGUALINDA-ADMIN";
   const totalTimer = useTimer();
   const roomTimer = useTimer();
   const room = ROOMS[roomIdx];
@@ -1049,11 +1177,29 @@ export default function App() {
   const totalPuzzles = ROOMS.reduce((s, r) => s + r.puzzles.length, 0);
   const donePuzzles = ROOMS.slice(0, roomIdx).reduce((s, r) => s + r.puzzles.length, 0) + puzzleIdx;
 
-  const startGame = () => {
-    setScreen("game"); setRoomIdx(0); setPuzzleIdx(0);
-    setPhase("story"); setRoomTimes([]); setCollectedPieces(Array(ROOMS.length).fill(false));
-    totalTimer.reset(); totalTimer.start();
-    roomTimer.reset(); roomTimer.start();
+  const startGame = async () => {
+    const nextSessionCode = joinCode.trim() || sync.sessionCode || sync.createSession();
+    const nextGroupName = groupName.trim() || `Grupo ${round}`;
+
+    try {
+      setJoinError("");
+      await sync.joinSession({ sessionCode: nextSessionCode, teamName: nextGroupName });
+      setJoinCode(nextSessionCode);
+      setGroupName(nextGroupName);
+      setScreen("game");
+      setRoomIdx(0);
+      setPuzzleIdx(0);
+      setPhase("story");
+      setRoomTimes([]);
+      setCollectedPieces(Array(ROOMS.length).fill(false));
+      setScore(0);
+      totalTimer.reset();
+      totalTimer.start();
+      roomTimer.reset();
+      roomTimer.start();
+    } catch (error) {
+      setJoinError(error.message || "No se pudo unir la sesión.");
+    }
   };
 
   const onSolvePuzzle = () => {
@@ -1076,6 +1222,13 @@ export default function App() {
       setCollectedPieces(prev => {
         const newPieces = [...prev];
         newPieces[roomIdx] = true;
+        sync.updateTeam({
+          collected_pieces: newPieces,
+          room_idx: roomIdx + 1,
+          puzzle_idx: 0,
+          phase: roomIdx + 1 < ROOMS.length ? "story" : "final",
+          last_event: `${room.name} completada`,
+        });
         return newPieces;
       });
       roomTimer.reset(); roomTimer.start();
@@ -1083,6 +1236,11 @@ export default function App() {
         setRoomIdx(r => r + 1); setPuzzleIdx(0); setPhase("story");
         setCodeInput(""); setCodeError(""); setShowHint(false);
       } else {
+        sync.updateTeam({
+          phase: "final",
+          status: "completed",
+          last_event: "Misión completada",
+        });
         totalTimer.stop();
         setScreen("final");
       }
@@ -1095,9 +1253,56 @@ export default function App() {
     setRound(r => r + 1);
     setRoomIdx(0); setPuzzleIdx(0); setPhase("story");
     setRoomTimes([]); setCollectedPieces(Array(ROOMS.length).fill(false));
+    setScore(0);
     totalTimer.reset(); totalTimer.start();
     roomTimer.reset(); roomTimer.start();
   };
+
+  const applyScore = (delta) => {
+    setScore((current) => Math.max(0, current + delta));
+  };
+
+  const openAdminPanel = () => {
+    setAdminError("");
+    setAdminCodeInput("");
+    setScreen("admin-login");
+  };
+
+  const unlockAdminPanel = () => {
+    if (adminCodeInput.trim() === adminAccessCode) {
+      setAdminError("");
+      setScreen("admin");
+      return;
+    }
+
+    setAdminError("Código de admin incorrecto.");
+  };
+
+  useEffect(() => {
+    if (screen !== "game") return;
+
+    sync.updateTeam({
+      room_idx: roomIdx,
+      puzzle_idx: puzzleIdx,
+      phase,
+      total_seconds: totalTimer.seconds,
+      room_seconds: roomTimer.seconds,
+      collected_pieces: collectedPieces,
+      last_event:
+        phase === "story"
+          ? `Sala ${roomIdx + 1} abierta`
+          : phase === "puzzle"
+            ? `Puzzle ${puzzleIdx + 1} activo`
+            : phase === "puzzleFeedback"
+              ? "Puzzle resuelto"
+              : phase === "solved"
+                ? "Sala resuelta"
+                : phase === "code"
+                  ? "Buscando código"
+                  : "Avanzando",
+      status: phase === "solved" && roomIdx + 1 === ROOMS.length ? "completed" : "active",
+    });
+  }, [screen, roomIdx, puzzleIdx, phase, totalTimer.seconds, roomTimer.seconds, collectedPieces, sync]);
 
   // Glosario
   const GlossaryPanel = () => (
@@ -1107,17 +1312,67 @@ export default function App() {
           <h3 style={{ color: "#a5b4fc", margin: 0 }}>📖 Glosario de la Unidad 3</h3>
           <button onClick={() => setGlossaryOpen(false)} style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
-        {Object.entries(GLOSSARY).map(([term, def]) => (
+        {Object.entries(GLOSSARY).map(([term, info]) => (
           <div key={term} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
             <p style={{ color: "#818cf8", fontWeight: 700, fontSize: 13, margin: "0 0 4px" }}>{term}</p>
-            <p style={{ color: "#cbd5e1", fontSize: 12, margin: 0, lineHeight: 1.6 }}>{def}</p>
+            <p style={{ color: "#cbd5e1", fontSize: 12, margin: 0, lineHeight: 1.6 }}>{info.description}</p>
+            <a
+              href={info.link}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: "inline-block", marginTop: 8, color: "#93c5fd", fontSize: 12, fontWeight: 700, textDecoration: "none" }}
+            >
+              Más info →
+            </a>
           </div>
         ))}
       </div>
     </div>
   );
 
+  if (screen === "admin-login") return (
+    <div style={{ minHeight: "100vh", background: "radial-gradient(ellipse at 20% 0%, #0f172a 0%, #020617 55%, #000 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      <div style={{ maxWidth: 440, width: "100%", background: "rgba(15,23,42,0.92)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 24 }}>
+        <p style={{ color: "#38bdf8", fontSize: 12, fontWeight: 800, letterSpacing: 2, margin: 0, textTransform: "uppercase" }}>Acceso de administración</p>
+        <h2 style={{ color: "#fff", margin: "8px 0 10px" }}>Panel privado</h2>
+        <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.6, marginTop: 0 }}>Este acceso no es para los grupos. Ingresa el código de administración para abrir el panel en tiempo real.</p>
+        <input
+          value={adminCodeInput}
+          onChange={(event) => setAdminCodeInput(event.target.value)}
+          placeholder="Código de admin"
+          style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 10, outline: "none", letterSpacing: 2, fontFamily: "monospace" }}
+          onKeyDown={(event) => event.key === "Enter" && unlockAdminPanel()}
+        />
+        {adminError && <p style={{ color: "#fca5a5", fontSize: 12, margin: "0 0 10px" }}>{adminError}</p>}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={unlockAdminPanel} style={{ flex: 1, background: "linear-gradient(135deg, #38bdf8, #6366f1)", color: "#fff", border: "none", borderRadius: 12, padding: "12px", cursor: "pointer", fontWeight: 800 }}>
+            Abrir panel
+          </button>
+          <button onClick={() => setScreen("start")} style={{ flex: 1, background: "rgba(255,255,255,0.06)", color: "#e2e8f0", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px", cursor: "pointer", fontWeight: 700 }}>
+            Volver
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (screen === "test") return (
+    <SupabaseQuickTest
+      sync={sync}
+      onBack={() => setScreen("start")}
+    />
+  );
+
   // Pantalla de inicio
+  if (screen === "admin") return (
+    <AdminDashboard
+      sync={sync}
+      rooms={ROOMS}
+      totalPuzzles={totalPuzzles}
+      onBack={() => setScreen("start")}
+    />
+  );
+
   if (screen === "start") return (
     <div style={{ minHeight: "100vh", background: "radial-gradient(ellipse at 20% 50%, #1e1b4b 0%, #0f0c29 50%, #0d1117 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       {glossaryOpen && <GlossaryPanel />}
@@ -1138,6 +1393,30 @@ export default function App() {
             El municipio de <b style={{ color: "#f1f5f9" }}>Agualinda</b> lleva 3 años sin agua potable. Eres el/la consultor/a de proyectos designado/a. Debes atravesar <b style={{ color: "#f1f5f9" }}>5 salas</b>, resolver <b style={{ color: "#f1f5f9" }}>{totalPuzzles} puzzles</b> aplicando los conceptos de la Unidad 3, y descifrar los códigos que abren cada puerta antes de que otro grupo lo haga.
           </p>
         </div>
+        <div style={{ background: "rgba(15,23,42,0.72)", borderRadius: 16, padding: 16, marginBottom: 18, border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p style={{ color: "#93c5fd", fontSize: 12, fontWeight: 800, margin: "0 0 10px" }}>UNIRSE A UNA SESIÓN</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <input
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              placeholder="Nombre del grupo"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 12, padding: "12px", outline: "none", width: "100%", boxSizing: "border-box" }}
+            />
+            <input
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+              placeholder="Código de sesión"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", borderRadius: 12, padding: "12px", outline: "none", width: "100%", boxSizing: "border-box", letterSpacing: 2, fontFamily: "monospace" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={startGame} style={{ flex: 2, minWidth: 200, background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+              Unirse y jugar
+            </button>
+          </div>
+          {joinError && <p style={{ color: "#fca5a5", fontSize: 12, margin: "10px 0 0" }}>{joinError}</p>}
+          <p style={{ color: "#64748b", fontSize: 11, margin: "10px 0 0", lineHeight: 1.5 }}>El admin crea el código desde el panel y cada grupo lo escribe aquí para compartir progreso en tiempo real.</p>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
           {ROOMS.map(r => (
             <div key={r.id} style={{ background: r.color + "15", borderRadius: 12, padding: "10px 14px", border: `1px solid ${r.color}33` }}>
@@ -1153,9 +1432,6 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-          <button onClick={startGame} style={{ flex: 2, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", border: "none", borderRadius: 12, padding: "14px", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 32px rgba(99,102,241,0.4)" }}>
-            🚀 Iniciar Misión
-          </button>
           <button onClick={() => setGlossaryOpen(true)} style={{ flex: 1, background: "rgba(255,255,255,0.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             📖 Glosario
           </button>
@@ -1292,7 +1568,7 @@ export default function App() {
                   <span style={{ color: "#475569", fontSize: 11 }}>Sala {roomIdx + 1} · {puzzleIdx + 1}/{room.puzzles.length}</span>
                 </div>
                 <h3 style={{ color: "#f1f5f9", fontSize: 16, fontWeight: 700, margin: "0 0 14px" }}>{puzzle.title}</h3>
-                {renderPuzzle(puzzle, onSolvePuzzle, room.color)}
+                {renderPuzzle(puzzle, onSolvePuzzle, room.color, applyScore, score)}
               </div>
             )}
 

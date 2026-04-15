@@ -197,6 +197,64 @@ Las que no deben incluirse son:
 
 **Código de sala:** `MERCADO`
 
+## Modo multijugador
+
+El juego incluye un flujo de grupos con un panel de administración en tiempo real.
+
+### Flujo de uso
+
+1. El admin abre el **Panel admin** desde la pantalla inicial.
+2. El admin pulsa **Crear código** y comparte ese código con los grupos.
+3. Cada grupo escribe su **Nombre del grupo** y el **Código de sesión** en la pantalla inicial.
+4. El progreso del equipo se sincroniza y el admin lo ve en vivo.
+
+### Qué ve el admin
+
+- Código de sesión activo.
+- Número de equipos conectados.
+- Sala y puzzle actual de cada equipo.
+- Tiempo total y último evento.
+- Barra de progreso individual por equipo.
+
+### Realtime gratuito
+
+La app usa **Supabase Free** como opción principal de sincronización en tiempo real. Si no configuras Supabase, el juego sigue funcionando en modo local y se sincroniza entre pestañas del mismo navegador.
+
+### Prueba rápida
+
+Puedes abrir `?mode=test` para validar en segundos:
+
+- que el frontend detecta Supabase
+- que se puede crear una sesión
+- que se puede unir un grupo
+- que se guarda y vuelve a leer el registro
+
+### Acceso de admin
+
+El panel de administración no aparece en la pantalla de jugadores. Se abre con la URL `?mode=admin` y luego pide el código definido en `VITE_ADMIN_ACCESS_CODE`.
+
+#### Variables de entorno
+
+Crea un archivo `.env` basado en [`.env.example`](.env.example) con estas variables:
+
+```bash
+VITE_SUPABASE_URL=tu_url_de_supabase
+VITE_SUPABASE_ANON_KEY=tu_anon_key
+VITE_ADMIN_ACCESS_CODE=tu_codigo_privado_de_admin
+```
+
+#### SQL de Supabase
+
+Ejecuta el contenido de [supabase.sql](supabase.sql) en el editor SQL de Supabase para crear la tabla `game_teams`.
+
+### Verificación multigrupo
+
+1. Abre el panel admin y crea un código.
+2. Abre otra pestaña o navegador y únete con un nombre de grupo.
+3. Repite con otro grupo.
+4. Completa una sala en uno de los grupos.
+5. Verifica que el panel admin actualice el progreso sin recargar.
+
 ## Despliegue en Vercel
 
 El proyecto ya incluye `vercel.json` con esta configuración:
@@ -213,10 +271,13 @@ Eso permite desplegarlo como aplicación Vite en Vercel.
 - `src/rompe.jsx`: módulo de pruebas del rompecabezas visual
 - `index.html`: plantilla base de Vite
 - `vite.config.js`: configuración del proyecto
+- `.env.example`: plantilla de variables de entorno para Supabase
+- `supabase.sql`: esquema y políticas para la tabla de equipos
 - `vercel.json`: configuración de despliegue en Vercel
 
 ## Observaciones
 
 - El juego está pensado para funcionar como una experiencia guiada de aula o equipo.
 - El panel de progreso del rompecabezas en la interfaz usa las piezas acumuladas por sala.
+- El panel admin funciona en tiempo real con Supabase Free cuando se configuran las variables de entorno.
 - Si quieres cambiar respuestas, códigos o textos, la fuente principal está en `App.jsx`.
